@@ -1,0 +1,297 @@
+from ast import Num
+from asyncio import base_tasks
+from cProfile import label
+import time
+import numpy as np
+from itertools import compress
+from functools import reduce
+from math import pi,sqrt,cos,sin
+import matplotlib.pyplot as plt
+import random
+import csv
+N1 = 10
+
+n_items = 500
+MaxWeight = 10.0
+MinWeight = 1.0
+C = 55*n_items/10 / 2
+items=np.mod(range(0,n_items),10)+1 #用在背包看有沒有超重的時候
+
+
+
+values = np.vectorize(lambda x: x + 5)(items) 
+
+#items = np.random.uniform(low=1, high=10, size=(n_items,))
+def calculate_weights(items, solution):
+    """Calculate the weight of a solution"""
+
+    return reduce(lambda x,y: x+y, compress(items, solution), 0)
+
+
+def measureQ(qindividuals):
+    """Consecutive measures on the qbits in order to generate a classical solution"""
+    return np.vectorize(lambda x,y : 1 if (x > np.power(y,2)) else 0)\
+                        (np.random.rand(n_items), qindividuals[:, 1])
+
+def gen_nbrs(qindividuals, N):
+    """Apply n measures on the qbits to generate classical solutions"""
+    neighbours = [np.array(measureQ(qindividuals)) for i in range(N)]
+    return neighbours
+
+def updateQ(worst_sol, best_sol, qindividuals):
+    """Update the qbits population applying the quantum gate on each qbit.
+       The movement is not made for those qbits on the tabu list"""
+    theta = 0.01*pi
+
+    for i in range(n_items):
+        mod_sinal = best_sol[i] - worst_sol[i]
+        # mod_sinal = best_sol[i] - np.mod((best_sol[i]+1),3)
+        # Check on which quadrant kth qbit is located and modify theta accordingly
+        if (qindividuals[i, 0]*qindividuals[i, 1] < 0) : mod_sinal *= -1 #mod_sinal =0-1=-1 權重匯市-的
+        if mod_sinal !=0:
+            Ugate = np.array([[cos(mod_sinal*theta), -sin(mod_sinal*theta)],
+                            [sin(mod_sinal*theta),  cos(mod_sinal*theta)]])  # Rotation matrix
+            qindividuals[i, :] = np.dot(Ugate, qindividuals[i, :])
+    return qindividuals
+
+def updateQ1(worst_sol, best_sol, qindividuals,c):
+    """Update the qbits population applying the quantum gate on each qbit.
+       The movement is not made for those qbits on the tabu list"""
+    theta = (0.01/c)*pi
+
+    for i in range(n_items):
+        mod_sinal = best_sol[i] - worst_sol[i]
+        # mod_sinal = best_sol[i] - np.mod((best_sol[i]+1),3)
+        # Check on which quadrant kth qbit is located and modify theta accordingly
+        if (qindividuals[i, 0]*qindividuals[i, 1] < 0) : mod_sinal *= -1 #mod_sinal =0-1=-1 權重匯市-的
+
+        if mod_sinal !=0:
+            Ugate = np.array([[cos(mod_sinal*theta), -sin(mod_sinal*theta)],
+                            [sin(mod_sinal*theta),  cos(mod_sinal*theta)]])  # Rotation matrix
+            qindividuals[i, :] = np.dot(Ugate, qindividuals[i, :])
+        
+    return qindividuals
+def updateQ1f(worst_sol,best_sol, qindividuals, c):
+    """Update the qbits population applying the quantum gate on each qbit.
+       The movement is not made for those qbits on the tabu list"""
+    theta = (0.01/c)*np.pi
+    
+    for i in range(n_items):
+        mod_sinal = best_sol[i] - worst_sol[i]
+        # mod_sinal = best_sol[i] - np.mod((best_sol[i]+1),2)
+        # Check on which quadrant kth qbit is located and modify theta accordingly
+        if mod_sinal !=0:
+            if (qindividuals[i, 0]*qindividuals[i, 1] < 0) : mod_sinal *= -1
+            temp = mod_sinal*theta
+            A = (np.cos(temp))*qindividuals[i, 0] - (np.sin(temp))*qindividuals[i, 1]
+            B = (np.sin(temp))*qindividuals[i, 0] + (np.cos(temp))*qindividuals[i, 1]
+            qindividuals[i, 0] = A
+            qindividuals[i, 1] = B
+        '''
+        Ugate = np.array([[cos(mod_sinal*theta), -sin(mod_sinal*theta)],
+                          [sin(mod_sinal*theta),  cos(mod_sinal*theta)]])  # Rotation matrix
+        qindividuals[i, :] = np.dot(Ugate, qindividuals[i, :])
+        '''
+    return qindividuals
+
+def updateQ1mo(worst_sol,best_sol, qindividuals, o,t,os,ot):
+    """Update the qbits population applying the quantum gate on each qbit.
+       The movement is not made for those qbits on the tabu list"""
+    for i in range(n_items):
+        mod_sinal = best_sol[i] - worst_sol[i]
+        if (qindividuals[i, 0]*qindividuals[i, 1] < 0) : mod_sinal *= -1
+        # mod_sinal = best_sol[i] - np.mod((best_sol[i]+1),2)
+        # Check on which quadrant kth qbit is located and modify theta accordingly
+        if mod_sinal ==1:
+            
+            A = o*qindividuals[i, 0] - os*qindividuals[i, 1]
+            B = os*qindividuals[i, 0] + o*qindividuals[i, 1]
+            qindividuals[i, 0] = A
+            qindividuals[i, 1] = B
+        elif mod_sinal ==-1:
+            
+            A = t*qindividuals[i, 0] - ot*qindividuals[i, 1]
+            B = ot*qindividuals[i, 0] + t*qindividuals[i, 1]
+            qindividuals[i, 0] = A
+            qindividuals[i, 1] = B
+        '''
+        Ugate = np.array([[cos(mod_sinal*theta), -sin(mod_sinal*theta)],
+                          [sin(mod_sinal*theta),  cos(mod_sinal*theta)]])  # Rotation matrix
+        qindividuals[i, :] = np.dot(Ugate, qindividuals[i, :])
+        '''
+    return qindividuals
+
+
+def updateQnew(best_sol, worst_sol, qindividuals, c,cc): #無法
+    """Update the qbits population applying the quantum gate on each qbit.
+       The movement is not made for those qbits on the tabu list"""
+    for i in range(n_items):
+        if best_sol[i] != worst_sol[i]:
+            if best_sol[i]==1:
+                if qindividuals[i, 1]*qindividuals[i, 1]<1 or qindividuals[i, 1]*qindividuals[i, 1]>0:
+                    qindividuals[i, 1] -= cc
+                    qindividuals[i, 0] += c
+            elif  best_sol[i]==0:
+                if qindividuals[i, 1]*qindividuals[i, 1]<1 or qindividuals[i, 1]*qindividuals[i, 1]>0:
+                    qindividuals[i, 0] -= cc
+                    qindividuals[i, 1] += c
+            
+    return qindividuals
+
+def fbw(neighbours):
+    tmp = [np.array(calculate_weights(values, vizinho)) for vizinho in neighbours]
+    t=[]
+    for i in range(N1):t.append(i)
+
+    tmp, t = (list(x) for x in zip(*sorted(zip(tmp, t))))
+    
+
+    return neighbours[t[-1]],neighbours[t[0]],t
+
+
+#QTS
+
+def adjust_solution(solution, C):
+
+    itemsSelected = solution.nonzero()[0]
+    weight = calculate_weights(items, solution)
+    while (weight > C):
+        r = np.random.randint(0,itemsSelected.shape[0]-1)
+        j = itemsSelected[r]
+        solution[j] = 0
+        weight = weight - items[j]
+        itemsSelected = np.delete(itemsSelected, r)
+    return solution
+
+def adjust_neighbours(vizinhos, C):
+    """Make the necessary adjustments to keep the generated solutions valid"""
+    new_neighbours = [np.array(adjust_solution(vizinho, C)) for vizinho in vizinhos]
+    return new_neighbours
+
+def new_best_fit(new_solution, best_fit):
+    """Compare the new solution with the current best"""
+    if (calculate_weights(values, new_solution) > calculate_weights(values, best_fit)):
+        return new_solution
+    return best_fit
+
+def find_best_worst(neighbours):
+    """Find the best and worst solution within a neighbourhood"""
+    tmp = [np.array(calculate_weights(values, vizinho)) for vizinho in neighbours]
+    return (neighbours[np.argmax(tmp)], neighbours[np.argmin(tmp)])
+
+i = 0
+j=0
+NumIter =1000
+time1=100
+
+#1
+x_values = []
+y_values = []
+total = []
+time_ary=[]
+
+for _ in range(time1):  
+  y_values.append([None] * NumIter)
+
+for x in range(1,NumIter+1):
+    x_values.append(x)
+
+
+
+for x in range(time1):
+#3 AE-QTS
+    start_time=time.time()
+    qindividuals2 = np.zeros((n_items, 2))
+    qindividuals2.fill(1 / sqrt(2))
+    solution2 = measureQ(qindividuals2)
+    best_fit2= solution2
+    best_fit2 = adjust_solution(best_fit2, C)
+    rTime=int(N1/2)
+    #rTime=1
+    #print(qindividuals2)
+    i=0
+    
+    qc_gate=[np.cos(0.01*np.pi),np.cos(0.01*np.pi*(-1)),
+             np.cos(0.01/2*np.pi),np.cos(0.01/2*np.pi*(-1)),
+             np.cos(0.01/3*np.pi),np.cos(0.01/3*np.pi*(-1)),
+             np.cos(0.01/4*np.pi),np.cos(0.01/4*np.pi*(-1)),
+             np.cos(0.01/5*np.pi),np.cos(0.01/5*np.pi*(-1))]
+    qs_gate=[np.sin(0.01*np.pi),np.sin(0.01*np.pi*(-1)),
+             np.sin(0.01/2*np.pi),np.sin(0.01/2*np.pi*(-1)),
+             np.sin(0.01/3*np.pi),np.sin(0.01/3*np.pi*(-1)),
+             np.sin(0.01/4*np.pi),np.sin(0.01/4*np.pi*(-1)),
+             np.sin(0.01/5*np.pi),np.sin(0.01/5*np.pi*(-1))]
+    while i<NumIter:
+        i=i+1
+        #print("第",i)
+#AE-QTS
+
+        c=0
+        arayc=[0.02186184999999996,0.01101951999999995,0.007365899999999925,0.005531740000000007,0.004428899999999958]
+        araycc=[0.02255967000000003,0.011193980000000048,0.007443440000000079,0.00557535000000009,0.004456810000000089]
+        neighbours2 = gen_nbrs(qindividuals2, N1)
+        neighbours2 = adjust_neighbours(neighbours2, C)
+        (best_solution2, worst_solution2,t) = fbw(neighbours2)
+        best_fit2 = new_best_fit(best_solution2, best_fit2)
+        while c <rTime:
+            best_solution2=neighbours2[t[N1-c-1]]
+            worst_solution2=neighbours2[t[c]]
+            #qindividuals2 = updateQ1(best_solution2, worst_solution2, qindividuals2,c+1) #陣列
+            #qindividuals2 = updateQ1f(best_solution2, worst_solution2, qindividuals2,c+1) #三角函數
+            #qindividuals2 = updateQnew(best_solution2, worst_solution2, qindividuals2,arayc[c],araycc[c]) #直接加
+            qindividuals2 = updateQ1mo(best_solution2, worst_solution2, qindividuals2,qc_gate[2*c],qc_gate[2*c+1],qs_gate[2*c],qs_gate[2*c+1]) #三角函數 加強版 
+            # print(qindividuals2)
+            # for qq in range(n_items):
+            #    print(qindividuals2[qq][0]*qindividuals2[qq][0])
+            #    print(qindividuals2[qq][1]*qindividuals2[qq][1])
+            # print("ok")
+            c+=1
+        gg2 = calculate_weights(values, best_fit2)
+        y_values[x][i - 1] = gg2
+    print(gg2)
+    end_time = time.time()
+    execution_time = end_time - start_time
+    time_ary.append(execution_time)
+    print(f"程序运行时间为: {execution_time} 秒")  
+avetime=0
+for pp in range(time1):
+    avetime+=time_ary[pp]
+print(avetime/time1)
+for p in range(NumIter):
+    xx=0  
+    for y in range(time1):
+    
+        if y <= time1-1:
+            xx = xx + y_values[y][p]
+        if y == time1-1:
+            xx = round(xx / time1)
+            total.append(xx)
+
+
+csv_file_path = "pe-qtsMO.csv"  #1
+
+# 使用with语句打开文件，确保在处理完文件后自动关闭
+with open(csv_file_path, 'a', newline='',encoding='utf-8') as file:
+    writer = csv.writer(file)   
+    #text_data=" n_item250 N=20 25 50 75 100 150 200 250 300 500 750 1000 time=50" #2
+
+    #writer.writerow([text_data])
+
+    # 创建CSV写入对象
+        
+    tl=[total]
+    # 将数据写入CSV文件
+    writer.writerows(tl)
+
+    
+
+    print(f"CSV文件已成功写入到 {csv_file_path}")
+
+
+
+
+
+# plt.title("item=100 time=100 case3")        
+# plt.plot(x_values, total, color='red', linestyle='--',label='QTS')
+# plt.legend(loc='lower right')
+# plt.show()
