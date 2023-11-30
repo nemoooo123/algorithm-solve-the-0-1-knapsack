@@ -1,0 +1,231 @@
+from ast import Num
+from cProfile import label
+import time
+import numpy as np
+from itertools import compress
+from functools import reduce
+from math import pi,sqrt,cos,sin
+import matplotlib.pyplot as plt
+import csv
+N = 50  # Neighbourhood size
+
+n_items = 100
+MaxWeight = 10.0
+MinWeight = 1.0
+
+items=np.mod(range(0,n_items),10)+1 #用在背包看有沒有超重的時候
+
+C = 55*n_items/10 / 2
+
+values = np.vectorize(lambda x: x + 5)(items) 
+
+def calculate_weights(items, solution):
+    """Calculate the weight of a solution"""
+
+    return reduce(lambda x,y: x+y, compress(items, solution), 0)
+
+def measure(ga_table):
+    for i in range(N):
+       for j in range(n_items):
+          ga_table[i][j]=np.random.randint(2)
+    return ga_table
+
+def adjust_solution(solution, C):
+    """Implements the repair method in order to respect the problem constraints.
+       Lamarckian greedy repair, i.e. consecutive deletion of selected items until
+       the constraints are  satisfied
+    """
+    itemsSelected = solution.nonzero()[0]
+    weight = calculate_weights(items, solution)
+    while (weight > C):
+        r = np.random.randint(0,itemsSelected.shape[0]-1)
+        j = itemsSelected[r]
+        solution[j] = 0
+        weight = weight - items[j]
+        itemsSelected = np.delete(itemsSelected, r)
+    return solution
+
+
+def adjust_neighbours(vizinhos, C):
+    """Make the necessary adjustments to keep the generated solutions valid"""
+    new_neighbours = [np.array(adjust_solution(vizinho, C)) for vizinho in vizinhos]
+    return new_neighbours
+
+def new_best_fit(new_solution, best_fit):
+    """Compare the new solution with the current best"""
+    if (calculate_weights(values, new_solution) > calculate_weights(values, best_fit)):
+        return new_solution
+    return best_fit
+
+def find_best_worst(neighbours):
+    """Find the best and worst solution within a neighbourhood"""
+    tmp = [np.array(calculate_weights(values, vizinho)) for vizinho in neighbours]
+    return (neighbours[np.argmax(tmp)], neighbours[np.argmin(tmp)])
+
+
+
+def pk(good_table,ga_table,rank):
+    #print(rank)
+    for i in range(N):
+        for j in range(i + 1, N):
+            if calculate_weights(values,ga_table[rank[i]]) < calculate_weights(values,ga_table[rank[j]]):
+                bb = rank[i]
+                rank[i] = rank[j]
+                rank[j] = bb
+    #再放進新陣列
+    for x in range(int(N*(2/5))):
+       for y in range(n_items):
+          good_table[x][y]=ga_table[rank[x]][y]
+    #or i in range(N):
+    #   print(calculate_weights(values,ga_table[i]))
+    #print(rank)       
+    return good_table
+          
+def rd(rank):
+    x=np.random.randint(int(N*(2/5)))
+    y=np.random.randint(int(N*(2/5)))
+    z=np.random.randint(int(N*(2/5)))
+    while x==y or x==z or y==z:
+      x=np.random.randint(int(N*(2/5)))
+      y=np.random.randint(int(N*(2/5)))
+      z=np.random.randint(int(N*(2/5)))  
+
+    xx=rank.index(x)
+    yy=rank.index(y)
+    zz=rank.index(z)
+    min_value = min(xx, yy,zz)
+    max_value = max(xx, yy,zz)
+    mid_value = xx + yy + zz - min_value - max_value
+    return min_value ,mid_value
+    
+
+   
+        
+import time
+
+# 记录开始时间
+start_time = time.time()
+
+
+
+
+
+
+
+NumIter =1000
+
+time1=100
+
+#1
+x_values = []
+y_values = []
+total = []
+
+
+#ga_weight=[] #價值
+
+
+
+
+
+for _ in range(time1):  
+  y_values.append([None] * NumIter)
+
+for x in range(1,NumIter+1):
+    x_values.append(x)
+
+
+for x in range(time1):
+
+    ga_table=[] #表
+    rank=[]
+    ga_table = np.zeros((N,n_items))
+    ga_table = measure(ga_table) #創好表
+    ga_table = adjust_neighbours(ga_table, C) #調整超出價值的表
+    best_fit=ga_table[0] #假設而已
+    for g in range(N):
+            rank.append(g)
+    good_table=np.zeros((N,n_items))
+
+
+    i=0
+
+
+    while i<NumIter:
+        i=i+1
+        print("第",i)
+        good_table=pk(good_table,ga_table,rank)#取前20好的fitness  good和rank 對比順序 ga沒動喔
+        
+        #交配開始
+        for dd in range(int(N*(3/10))): #選3取2，所以要做N/2 -10次 
+            #print("交配前",calculate_weights(values, best_fit))
+            (a,b)=rd(rank) #20隨機取三 並且排價值大小 取前二 所以拿a,b就好
+            m=int(N*(2/5))+dd*2
+             #先複製父母在新陣列
+            for v in range(n_items):
+                good_table[m][v]=ga_table[rank[a]][v]
+                good_table[m+1][v]=ga_table[rank[b]][v]
+            
+            random_num_of_mating=np.random.randint(n_items)  #隨機取交配的bit數
+            #print(random_num_of_mating)
+            for k in range(random_num_of_mating):
+                rand_bit=np.random.randint(n_items)
+                #交配(交換)
+                aaa=good_table[m][rand_bit]
+                good_table[m][rand_bit]=good_table[m+1][rand_bit]
+                good_table[m+1][rand_bit]=aaa
+                
+        #交配結束
+       
+        #突變開始
+        sol_mutation=45  #每一個解 達到突變率(0.05)的話
+        for j in range(N):
+            tmp=np.random.randint(100)
+            if tmp<sol_mutation: #隨機兩個bit做not
+                tmp2=np.random.randint(n_items)
+                good_table[j][tmp2]=( good_table[j][tmp2] + 1) % 2
+                tmp2=np.random.randint(n_items)
+                good_table[j][tmp2]=( good_table[j][tmp2] + 1) % 2
+        #print("突變後",calculate_weights(values, best_fit))
+        #ga和good表 複寫
+        for j in range(N):
+            for jj in range(n_items):
+                ga_table[j][jj]=good_table[j][jj]
+        #計算經過這次後的權重和價值
+        ga_table = adjust_neighbours(ga_table, C)
+        
+        best_num=0
+        for jj in range(1,N):
+            if calculate_weights(values,ga_table[best_num])<calculate_weights(values,ga_table[jj]):
+                best_num =jj
+        best_solution=ga_table[best_num]
+        best_fit = new_best_fit(best_solution, best_fit)
+        gg = calculate_weights(values, best_fit)
+        y_values[x][i - 1] = gg
+        #print(gg)
+
+    print("第 %d 次" %x)
+end_time = time.time()
+for p in range(NumIter):
+  xx=0  
+ 
+  for y in range(time1):
+    
+    if y <= time1-1:
+      xx = xx + y_values[y][p]
+
+      if y == time1-1:
+        xx = round(xx / time1)
+        total.append(xx)
+
+execution_time = end_time - start_time
+
+print(f"程序运行时间为: {execution_time} 秒")   
+
+
+
+
+# plt.title("GA")        
+# plt.plot(x_values, total, color='red', linestyle='--',label='GA')
+# plt.legend(loc='lower right')
+# plt.show()
