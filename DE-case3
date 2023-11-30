@@ -1,0 +1,220 @@
+from ast import Num
+from cProfile import label
+import time
+import numpy as np
+from itertools import compress
+from functools import reduce
+from math import pi,sqrt,cos,sin
+import matplotlib.pyplot as plt
+import random
+import csv
+
+
+N = 20 # Neighbourhood size
+
+n_items = eval(input("輸入物品數量:"))
+MaxWeight = 10.0
+MinWeight = 1.0
+CR = 0.7
+items=np.mod(range(0,n_items),10)+1 #用在背包看有沒有超重的時候
+
+C = 55*n_items/10 / 2
+
+values = np.vectorize(lambda x: x + 5)(items) 
+
+
+def calculate_weights(items, solution):
+    """Calculate the weight of a solution"""
+
+    return reduce(lambda x,y: x+y, compress(items, solution), 0)
+
+def measure(de_table):
+    for i in range(N):
+       for j in range(n_items):
+          de_table[i][j]=np.random.randint(2)
+    return de_table
+
+def adjust_solution(solution, C):
+    """Implements the repair method in order to respect the problem constraints.
+       Lamarckian greedy repair, i.e. consecutive deletion of selected items until
+       the constraints are  satisfied
+    """
+    itemsSelected = solution.nonzero()[0]
+    weight = calculate_weights(items, solution)
+    while (weight > C):
+        r = np.random.randint(0,itemsSelected.shape[0]-1)
+        j = itemsSelected[r]
+        solution[j] = 0
+        weight = weight - items[j]
+        itemsSelected = np.delete(itemsSelected, r)
+    return solution
+
+
+def adjust_neighbours(vizinhos, C):
+    """Make the necessary adjustments to keep the generated solutions valid"""
+    new_neighbours = [np.array(adjust_solution(vizinho, C)) for vizinho in vizinhos]
+    return new_neighbours
+
+def new_best_fit(new_solution, best_fit):
+    """Compare the new solution with the current best"""
+    if (calculate_weights(values, new_solution) > calculate_weights(values, best_fit)):
+        return new_solution
+    return best_fit
+
+
+def crossover(de_table, n): #交配
+    good_table = []
+    for i in range(len(de_table)): 
+        v = np.array(mutation(de_table, n, i))
+        #print(v)
+        if calculate_weights(items,v)<=C:
+            ind_fit = calculate_weights(values,de_table[i])
+            v_fit = calculate_weights(values,v)
+            if v_fit > ind_fit:
+                good_table.append(v)
+            else:
+                good_table.append(de_table[i])
+        else:
+                good_table.append(de_table[i])
+    return good_table
+
+def mutation(de_table,n, index):
+    F = random.randint(0, 1)
+    selected = []
+
+    canidates = list(range(0, len(de_table)))
+    canidates.remove(index)
+    random_index = random.sample(canidates, 3)
+    
+    selected.append(de_table[random_index[0]]) #隨機取三個父代 
+    selected.append(de_table[random_index[1]])
+    selected.append(de_table[random_index[2]])
+    
+
+
+    vector = []
+    for g in range(n_items):    
+        xor = int(int(selected[1][g]) ^ int(selected[2][g]))  # x2 xoring x3
+        aand = int(F) & xor  # F anding xor
+        oor = int(int(selected[0][g]) | int(aand))  # x1 oring aand
+        vector.append(oor)
+
+    v_trial = []
+    for x in range(len(vector)):
+        if random.random() <= CR:
+            v_trial.append(int(vector[x]))
+            
+        else:
+            v_trial.append(int(de_table[index][x]))
+
+    return v_trial
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+start_time = time.time()
+
+i = 0
+j=0
+NumIter =1000
+
+time1=30
+
+
+#1
+x_values = []
+y_values = []
+total = []
+
+
+
+for _ in range(time1):  
+  y_values.append([None] * NumIter)
+
+for x in range(1,NumIter+1):
+    x_values.append(x)
+
+
+for x in range(time1):
+    de_table=[] 
+    de_table = np.zeros((N,n_items))
+    good_table = np.zeros((N,n_items))
+    de_table = measure(de_table) #創好表
+    de_table = adjust_neighbours(de_table, C) #調整超出價值的表
+    best_fit=de_table[0] #假設而已
+    i=0
+    while i<NumIter:
+        i=i+1
+        #print("第",i)
+        good_table=de_table
+
+        good_table=crossover(de_table,N) #回傳更新好的table 
+        good_table = adjust_neighbours(good_table, C)
+        #修改mutation 以及測價值good table 然後找最大 謝謝
+        best_solution=good_table[0] #假設
+        for c in range(1,len(good_table)):
+            if calculate_weights(values,best_solution)<calculate_weights(values,good_table[c]):
+                best_solution=good_table[c]
+
+        best_fit = new_best_fit(best_solution, best_fit)
+        gg = calculate_weights(values, best_fit)
+        y_values[x][i - 1] = gg
+        de_table=good_table #更新de_table
+        #print(qq)
+    print("第 %d 次" %x)
+    #print(gg)
+
+end_time = time.time()
+
+for p in range(NumIter):
+  xx=0  
+ 
+  for y in range(time1):
+    
+    if y <= time1-1:
+      xx = xx + y_values[y][p]
+
+      if y == time1-1:
+        xx = round(xx / time1)
+        total.append(xx)
+
+execution_time = end_time - start_time
+
+print(f"程序运行时间为: {execution_time} 秒")   
+
+# 指定要写入的CSV文件名
+csv_file_path = "de500.csv"  #1
+
+# 使用with语句打开文件，确保在处理完文件后自动关闭
+with open(csv_file_path, 'a', newline='',encoding='utf-8') as file:
+    writer = csv.writer(file)
+    #text_data=" n_item250 N=20 25 50 75 100 150 200 250 300 500 750 1000 time=50" #2
+
+    #writer.writerow([text_data])
+
+    # 创建CSV写入对象
+        
+    tl=[total]
+    # 将数据写入CSV文件
+    writer.writerows(tl)
+
+    
+
+    print(f"CSV文件已成功写入到 {csv_file_path}")
+
+# plt.title("items = 250")        
+# plt.plot(x_values, total, color='red', linestyle='--',label='DE')
+# plt.legend(loc='lower right')
+# plt.show()  
