@@ -1,0 +1,254 @@
+from ast import Num
+from cProfile import label
+import time
+import numpy as np
+from itertools import compress
+from functools import reduce
+from math import pi,sqrt,cos,sin
+import matplotlib.pyplot as plt
+import csv
+N = 10  # Neighbourhood size
+
+n_items = 100
+MaxWeight = 10.0
+MinWeight = 1.0
+
+# Generate array of possible items
+# Real valued weights
+items=np.mod(range(0,n_items),10)+1
+#items = np.random.uniform(low=MinWeight, high=MaxWeight, size=(n_items,))
+#print(items)
+
+# Integer valued weights
+# items = np.random.randint(low=MinWeight,high=MaxWeight, size=(n_items,))
+# print(items)
+
+# Bag maximum capacity
+C = 55*n_items/10 / 2
+# Profits array for each item. The item index corresponds to its associated profit value
+values = np.vectorize(lambda x: x + 5)(items)
+
+#print("Item search space: %s" % items)
+#print("Item values %s" % values)
+#print("Bag capacity: %i" % C)
+
+
+def calculate_weights(items, solution):
+    """Calculate the weight of a solution"""
+    return reduce(lambda x,y: x+y, compress(items, solution), 0)
+
+
+
+def measure(qindividuals):
+    """Consecutive measures on the qbits in order to generate a classical solution"""
+    return np.vectorize(lambda x,y : 1 if (x > np.power(y,2)) else 0)\
+                        (np.random.rand(n_items), qindividuals[:, 1])
+
+
+def gen_nbrs(qindividuals, N):
+    """Apply n measures on the qbits to generate classical solutions"""
+    neighbours = [np.array(measure(qindividuals)) for i in range(N)]
+    return neighbours
+
+
+def adjust_solution(solution, C):
+    """Implements the repair method in order to respect the problem constraints.
+       Lamarckian greedy repair, i.e. consecutive deletion of selected items until
+       the constraints are  satisfied
+    """
+    itemsSelected = solution.nonzero()[0]
+    weight = calculate_weights(items, solution)
+    while (weight > C):
+        r = np.random.randint(0,itemsSelected.shape[0]-1)
+        j = itemsSelected[r]
+        solution[j] = 0
+        weight = weight - items[j]
+        itemsSelected = np.delete(itemsSelected, r)
+    return solution
+
+
+def adjust_neighbours(vizinhos, C):
+    """Make the necessary adjustments to keep the generated solutions valid"""
+    new_neighbours = [np.array(adjust_solution(vizinho, C)) for vizinho in vizinhos]
+    return new_neighbours
+
+
+def new_best_fit(new_solution, best_fit):
+    """Compare the new solution with the current best"""
+    if (calculate_weights(values, new_solution) > calculate_weights(values, best_fit)):
+        return new_solution
+    return best_fit
+
+
+def find_best_worst(neighbours):
+    """Find the best and worst solution within a neighbourhood"""
+    tmp = [np.array(calculate_weights(values, vizinho)) for vizinho in neighbours]
+    return (neighbours[np.argmax(tmp)], neighbours[np.argmin(tmp)])
+
+
+def updateQ(worst_sol, best_sol, qindividuals):
+    """Update the qbits population applying the quantum gate on each qbit.
+       The movement is not made for those qbits on the tabu list"""
+    theta = 0.01*pi
+
+    for i in range(n_items):
+        mod_sinal = best_sol[i] - worst_sol[i]
+        # mod_sinal = best_sol[i] - np.mod((best_sol[i]+1),3)
+        # Check on which quadrant kth qbit is located and modify theta accordingly
+        #if (qindividuals[i, 0]*qindividuals[i, 1] < 0) : mod_sinal *= -1 #mod_sinal =0-1=-1 權重匯市-的
+
+        if mod_sinal !=0:
+            if (qindividuals[i, 0]*qindividuals[i, 1] < 0) : mod_sinal *= -1
+            temp = mod_sinal*theta
+            A = (np.cos(temp))*qindividuals[i, 0] - (np.sin(temp))*qindividuals[i, 1]
+            B = (np.sin(temp))*qindividuals[i, 0] + (np.cos(temp))*qindividuals[i, 1]
+            qindividuals[i, 0] = A
+            qindividuals[i, 1] = B
+    return qindividuals
+
+def updateQ1(best_sol, worst_sol, qindividuals, angle = 0.01):
+    """Update the qbits population applying the quantum gate on each qbit.
+       The movement is not made for those qbits on the tabu list"""
+    theta = angle*180/100
+    
+    for i in range(n_items):
+        if best_sol[i] != worst_sol[i]:
+            if best_sol[i]==1:
+                qindividuals[i, 1] += theta
+                qindividuals[i, 0] -= theta
+            elif  best_sol[i]==0:
+                qindividuals[i, 0] += theta
+                qindividuals[i, 1] -= theta
+    return qindividuals
+
+
+
+
+
+#qindividuals = np.zeros((n_items, 3))
+#qindividuals.fill(1 / sqrt(3))
+
+#solution = measure(qindividuals)
+
+
+#best_fit = solution
+
+
+i = 0
+j=0
+NumIter =1000
+
+time1=100 
+
+#print("Bag weight limit: %f" % C)
+#print("Number of iterations: %i" % NumIter)
+#print("Number of items: %i" % n_items)
+#print("Initial weight (without repair): %f" % calculate_weights(items, best_fit))
+
+
+
+
+#print("Initial weight (with repair): %f" % calculate_weights(items, best_fit))
+#print("Initial profit (with repair): %f" % calculate_weights(values, best_fit))
+#print("Initial profit (with repair): %f" % calculate_weights(values, best_fit3))
+#print("Initial profit (with repair): %f" % calculate_weights(values, best_fit3))
+
+start_time = time.time()
+#1
+x_values = []
+y_values = []
+total = []
+#3
+y1_values = []
+total1 = []
+
+
+for _ in range(time1):  
+  y_values.append([None] * NumIter)
+  y1_values.append([None] * NumIter)
+
+
+for x in range(1,NumIter+1):
+  x_values.append(x)
+  
+
+for x in range(time1):
+  #1
+  qindividuals = np.zeros((n_items, 2))
+  qindividuals.fill(1 / sqrt(2))
+  solution = measure(qindividuals)
+  best_fit = solution
+  best_fit = adjust_solution(best_fit, C)
+  #3
+#   qindividuals1 = np.zeros((n_items, 2))
+#   qindividuals1.fill(1 / sqrt(2))
+#   solution1 = measure(qindividuals1)
+#   best_fit1= solution1
+#   best_fit1 = adjust_solution(best_fit1, C)
+  i = 0
+  j = 0
+  
+
+  while i < NumIter:
+    i = i + 1
+    #1
+    neighbours = gen_nbrs(qindividuals, N)
+    neighbours = adjust_neighbours(neighbours, C)
+    (best_solution, worst_solution) = find_best_worst(neighbours)
+    best_fit = new_best_fit(best_solution, best_fit)
+    qindividuals = updateQ(best_solution, worst_solution, qindividuals)
+    gg = calculate_weights(values, best_fit)
+    y_values[x][i - 1] = gg
+    #3
+    # neighbours1 = gen_nbrs(qindividuals1, N)
+    # neighbours1 = adjust_neighbours(neighbours1, C)
+    # (best_solution1, worst_solution1) = find_best_worst(neighbours1)
+    # best_fit1 = new_best_fit(best_solution1, best_fit1)
+    # qindividuals1 = updateQ(best_solution1, worst_solution1, qindividuals1)
+    # gg1 = calculate_weights(values, best_fit1)
+    # y1_values[x][i - 1] = gg1
+
+    
+  print("第 %d 次" %x)
+  print(gg)  
+             
+          
+
+    
+for p in range(NumIter):
+  xx=0  
+  xx1=0
+  for y in range(time1):
+    
+    if y <= time1-1:
+      xx = xx + y_values[y][p]
+      #xx1= xx1 + y1_values[y][p]
+      if y == time1-1:
+        xx = round(xx / time1)
+        total.append(xx)
+        #xx1 = round(xx1 / time1)
+        #total1.append(xx1)
+csv_file_path = "qts.csv"  #1
+
+# 使用with语句打开文件，确保在处理完文件后自动关闭
+with open(csv_file_path, 'a', newline='',encoding='utf-8') as file:
+    writer = csv.writer(file)   
+
+
+    #writer.writerow([text_data])
+
+    # 创建CSV写入对象
+        
+    tl=[total]
+    # 将数据写入CSV文件
+    writer.writerows(tl)
+
+    
+
+    print(f"CSV文件已成功写入到 {csv_file_path}")
+        
+# plt.title("")        
+# plt.plot(x_values, total, color='red', linestyle='--',label='past')
+# plt.plot(x_values, total1, color='green', linestyle='-',label='90')
+# plt.legend(loc='lower right')
+# plt.show()
