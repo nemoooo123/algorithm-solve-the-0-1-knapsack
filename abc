@@ -1,0 +1,323 @@
+from ast import Num
+from cProfile import label
+import time
+import numpy as np
+from itertools import compress
+from functools import reduce
+from math import pi,sqrt,cos,sin
+import matplotlib.pyplot as plt
+import random
+
+
+N3 = 1000  # Neighbourhood size
+
+n_items = 100
+MaxWeight = 10.0
+MinWeight = 1.0
+
+items=np.mod(range(0,n_items),10)+1 #用在背包看有沒有超重的時候
+
+C = 55*n_items/10 / 2
+
+values = np.vectorize(lambda x: x + 5)(items) 
+
+def calculate_weights(items, solution):
+    """Calculate the weight of a solution"""
+
+    return reduce(lambda x,y: x+y, compress(items, solution), 0)
+
+
+def measure_abc(abc):
+    for i in range(N3):
+       for j in range(n_items):
+          abc[i][j]=np.random.rand()
+    return abc
+
+def adjust_solution_abc(solution, C,fit_table,put_item,abc_values): #想在這裡就算好適應值回傳
+    """Implements the repair method in order to respect the problem constraints.
+       Lamarckian greedy repair, i.e. consecutive deletion of selected items until
+       the constraints are  satisfied
+    """
+    #把一組解的亂數判斷0.1
+    put_th=[]
+    for b in range(n_items):
+        r=np.random.rand() #看是1.0
+        if solution[b]>=r:
+           put_th.append(1)
+        elif solution[b]<r:
+           put_th.append(0)
+    
+    
+    record=0
+    itemsSelected = [i for i, value in enumerate(put_th) if value != 0]
+    weight = calculate_weights(items, put_th)
+    if weight>C :
+        fit_table.append(100)   
+        record+=1
+    while (weight > C):
+        rs = np.random.randint(0,len(itemsSelected)-1)
+        j = itemsSelected[rs]
+        put_th[j] = 0
+        
+        weight = weight - items[j]
+        itemsSelected = np.delete(itemsSelected, rs)
+    cc=calculate_weights(items,put_th)
+    da=calculate_weights(values,put_th)
+    put_item.append(put_th)
+    abc_values.append(da) #問題來了 因為它超重會扣0/1 結果亂數那邊要怎麼判斷 #還是如果超重就那組解不要 ，重生一個
+    if record==0:
+        fit_table.append(1/(1+da))
+    
+    return solution
+
+def adjust_neighbours_abc(vizinhos, C,fit_table,put_item,abc_values):
+    """Make the necessary adjustments to keep the generated solutions valid"""
+    new_neighbours = [np.array(adjust_solution_abc(vizinho, C,fit_table,put_item,abc_values)) for vizinho in vizinhos]
+    return new_neighbours 
+
+def new_best_fit_abc(new_solution, best_fit):
+    """Compare the new solution with the current best"""
+    if new_solution > best_fit:
+        return new_solution
+    return best_fit
+
+
+
+   
+
+#te1-----------------------------
+
+
+def employed_bee_te1(abc_table,put_item,abc_values,fit_table,trial):
+    
+    for u in range(int(N3/2)):
+            x = random.sample(range(N3), 2)
+            o1=random.uniform(-1, 1)#生成0~1
+            test= random.randint(1,int(n_items/2))
+            x_new=[]
+            bag=sorted(random.sample(range(0,n_items), test))
+            for tt in range(test):
+                x_new.append(abs(abc_table[x[0]][bag[tt]]+o1*(abc_table[x[0]][bag[tt]]-abc_table[x[1]][bag[tt]])))
+                if x_new[tt]>1:
+                    x_new[tt]-=1
+            
+            r=random.random() 
+            test_table=[]
+            num=0
+            for i in range(n_items):
+                if i==bag[num] and x_new[num]>r and num<=len(bag):
+                    test_table.append(1)
+                    if num!=len(bag)-1:
+                        num+=1
+                    r=random.random() 
+                elif i==bag[num] and x_new[num]<r and num<=len(bag):
+                    test_table.append(0)
+                    if num!=len(bag)-1:
+                        num+=1
+                    r=random.random() 
+                else:
+                    test_table.append(put_item[x[0]][i])
+                
+            
+            
+            if calculate_weights(items,test_table)>C:
+                new_fit=100
+            else:
+                new_fit=1/(calculate_weights(values,test_table)+1)
+            
+
+            if new_fit>=fit_table[x[0]] :
+                trial[x[0]]+=1
+                
+            elif new_fit<fit_table[x[0]]:
+                trial[x[0]]=0
+                for bb in range(test):
+                    abc_table[x[0]][bag[bb]]=x_new[bb]
+                    put_item[x[0]][bag[bb]]=test_table[bag[bb]]
+                abc_values[x[0]]=calculate_weights(values,test_table)
+                fit_table[x[0]]=new_fit
+            
+    return abc_table,put_item,abc_values,fit_table,trial
+      
+def onlooker_bee1(abc_table,put_item,abc_values,fit_table,trial):
+    sum=0
+    p=[]
+    for i in range(N3):
+      if fit_table[i]!=100:
+        sum+=fit_table[i]
+    for j in range(N3):
+        if fit_table[j]==100:
+           p.append(0)
+        else:
+            p.append(fit_table[j]/sum)
+    #放好之後
+    x1=random.random() 
+    for i in range(len(p)):
+       if p[i]>x1:
+          abc_table,put_item,abc_values,fit_table,trial=find1(abc_table,put_item,abc_values,fit_table,trial,i)
+          
+    return abc_table,put_item,abc_values,fit_table,trial  
+
+def find1(abc_table,put_item,abc_values,fit_table,trial,x1):
+            
+    x2 = random.randint(0, N3-1)
+    while x1==x2:
+        x2 =random.randint(0, N3-1)
+        
+    o1=random.uniform(-1, 1)#生成0~1
+    test= random.randint(1,int(n_items/2))
+    x_new=[]
+    bag=sorted(random.sample(range(0,n_items), test))
+    for tt in range(test):
+        x_new.append(abs(abc_table[x1][bag[tt]]+o1*(abc_table[x1][bag[tt]]-abc_table[x2][bag[tt]])))
+        if x_new[tt]>1:
+            x_new[tt]-=1
+    r=random.random() 
+    test_table=[]
+    num=0
+    for i in range(n_items):
+        if i==bag[num] and x_new[num]>r and num<=len(bag):
+            test_table.append(1)
+            if num!=len(bag)-1:
+                num+=1
+            r=random.random() 
+        elif i==bag[num] and x_new[num]<r and num<=len(bag):
+            test_table.append(0)
+            if num!=len(bag)-1:
+                num+=1
+            r=random.random() 
+        else:
+            test_table.append(put_item[x1][i])
+        
+    
+    
+    if calculate_weights(items,test_table)>C:
+        new_fit=100
+    else:
+        new_fit=1/(calculate_weights(values,test_table)+1)
+    
+
+    if new_fit>=fit_table[x1] :
+        trial[x1]+=1
+        
+    elif new_fit<fit_table[x1]:
+        trial[x1]=0
+        for bb in range(test):
+            abc_table[x1][bag[bb]]=x_new[bb]
+            put_item[x1][bag[bb]]=test_table[bag[bb]]
+        abc_values[x1]=calculate_weights(values,test_table)
+        fit_table[x1]=new_fit
+            
+    return abc_table,put_item,abc_values,fit_table,trial
+
+#t1---------------------------
+
+
+
+NumIter =1000
+
+time1=100
+
+#1
+
+
+#helf
+y1_values = []
+total1 = []
+
+
+start_time = time.time()
+
+
+for _ in range(time1):  
+
+  y1_values.append([None] * NumIter)
+
+
+for x in range(1,NumIter+1):
+    x_values.append(x)
+
+
+for x in range(time1):
+    # abc_values_abc=[] #存放每個解的值
+    # abc_table_abc=[] #機率
+    # put_item_abc=[] #物品
+    # fit_table_abc=[]
+    # trial_abc=[]
+    # for ccc in range(N3):
+    #    trial_abc.append(0)
+    # abc_table_abc = np.zeros((N3,n_items))
+    # abc_table_abc = measure_abc(abc_table_abc) #創好表
+    # abc_table_abc = adjust_neighbours_abc(abc_table_abc, C,fit_table_abc,put_item_abc,abc_values_abc) #調整超出價值的表
+    # best_fit_abc=0 #假設而已
+    # trial_num=0
+    
+    #half
+    abc_values_abc2=[] #存放每個解的值
+    abc_table_abc2=[] #機率
+    put_item_abc2=[] #物品
+    fit_table_abc2=[]
+    trial_abc2=[]
+    for ccc in range(N3):
+       trial_abc2.append(0)
+    abc_table_abc2 = np.zeros((N3,n_items))
+    abc_table_abc2 = measure_abc(abc_table_abc2) #創好表
+    abc_table_abc2 = adjust_neighbours_abc(abc_table_abc2, C,fit_table_abc2,put_item_abc2,abc_values_abc2) #調整超出價值的表
+    best_fit_abc2=0 #假設而已
+
+    i=0
+
+
+
+    while i<NumIter:
+        i=i+1
+      
+        #HALF
+        abc_table_abc2,put_item_abc2,abc_values_abc2,fit_table_abc2,trial_abc2=employed_bee_te1(abc_table_abc2,put_item_abc2,abc_values_abc2,fit_table_abc2,trial_abc2)
+        abc_table_abc2,put_item_abc2,abc_values_abc2,fit_table_abc2,trial_abc2=onlooker_bee1(abc_table_abc2,put_item_abc2,abc_values_abc2,fit_table_abc2,trial_abc2)
+        
+        best_solution_abc2=[]
+        for gc in range(N3):
+            if fit_table_abc2[gc]!=100: 
+                best_solution_abc2.append(abc_values_abc2[gc])
+        bbss_abc2=max(best_solution_abc2)
+        best_fit_abc2= new_best_fit_abc(best_fit_abc2,bbss_abc2)
+        
+        gg_abc2 = best_fit_abc2
+        y1_values[x][i - 1] = gg_abc2
+
+
+
+
+   
+
+    print("第 %d 次" %x)
+    
+
+
+end_time = time.time()
+for p in range(NumIter):
+  xx1=0
+  for y in range(time1):
+    
+    if y <= time1-1:
+      xx1 = xx1 + y1_values[y][p]
+      if y == time1-1:
+        xx1 = round(xx1 / time1)
+        total1.append(xx1)
+execution_time = end_time - start_time
+
+print(f"程序运行时间为: {execution_time} 秒")   
+
+
+plt.title("item=100 time=10 case3")        
+plt.plot(x_values, total1, color='green', linestyle='--',label='motify-ABC-half')
+
+plt.legend(loc='lower right')
+plt.show()
+
+
+
+
+
+
