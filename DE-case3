@@ -195,7 +195,14 @@ execution_time = end_time - start_time
 print(f"程序运行时间为: {execution_time} 秒")   
 
 # 指定要写入的CSV文件名
-csv_file_path = "de500.csv"  #1
+if n_items==100:
+    csv_file_path = "de100.csv"  #1
+elif n_items==250:
+    csv_file_path = "de250.csv"
+elif n_items==500:
+    csv_file_path = "de500.csv"
+else:
+    csv_file_path = "de.csv"
 
 # 使用with语句打开文件，确保在处理完文件后自动关闭
 with open(csv_file_path, 'a', newline='',encoding='utf-8') as file:
