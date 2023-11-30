@@ -7,7 +7,7 @@ from functools import reduce
 from math import pi,sqrt,cos,sin
 import matplotlib.pyplot as plt
 import random
-
+import csv
 
 N3 = 1000  # Neighbourhood size
 
@@ -225,6 +225,7 @@ time1=100
 y1_values = []
 total1 = []
 x_values=[]
+time_ary=[]
 
 start_time = time.time()
 
@@ -239,6 +240,7 @@ for x in range(1,NumIter+1):
 
 
 for x in range(time1):
+    start_time=time.time()
     # abc_values_abc=[] #存放每個解的值
     # abc_table_abc=[] #機率
     # put_item_abc=[] #物品
@@ -285,17 +287,21 @@ for x in range(time1):
         
         gg_abc2 = best_fit_abc2
         y1_values[x][i - 1] = gg_abc2
+        print("第 %d 次" %x)
 
+    end_time = time.time()
+    execution_time = end_time - start_time
+    time_ary.append(execution_time)
+    print(f"程序运行时间为: {execution_time} 秒")  
+avetime=0
+for pp in range(time1):
+    avetime+=time_ary[pp]
+print(avetime/time1)    
 
 
 
    
-
-    print("第 %d 次" %x)
     
-
-
-end_time = time.time()
 for p in range(NumIter):
   xx1=0
   for y in range(time1):
@@ -305,17 +311,31 @@ for p in range(NumIter):
       if y == time1-1:
         xx1 = round(xx1 / time1)
         total1.append(xx1)
-execution_time = end_time - start_time
 
-print(f"程序运行时间为: {execution_time} 秒")   
+csv_file_path = "abc.csv"  #1
 
+# 使用with语句打开文件，确保在处理完文件后自动关闭
+with open(csv_file_path, 'a', newline='',encoding='utf-8') as file:
+    writer = csv.writer(file)   
+    #text_data=" n_item250 N=20 25 50 75 100 150 200 250 300 500 750 1000 time=50" #2
 
-plt.title("item=100 time=10 case3")        
-plt.plot(x_values, total1, color='green', linestyle='--',label='motify-ABC-half')
+    #writer.writerow([text_data])
 
-plt.legend(loc='lower right')
-plt.show()
+    # 创建CSV写入对象
+        
+    tl=[total]
+    # 将数据写入CSV文件
+    writer.writerows(tl)
 
+    
+
+    print(f"CSV文件已成功写入到 {csv_file_path}")
+
+# plt.title("item=100 time=10 case3")        
+# plt.plot(x_values, total1, color='green', linestyle='--',label='motify-ABC-half')
+
+# plt.legend(loc='lower right')
+# plt.show()
 
 
 
