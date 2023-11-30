@@ -224,7 +224,7 @@ time1=100
 #helf
 y1_values = []
 total1 = []
-
+x_values=[]
 
 start_time = time.time()
 
