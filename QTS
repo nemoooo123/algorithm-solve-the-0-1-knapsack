@@ -1,3 +1,5 @@
+#https://github.com/pedrolisboa/QTS-0-1-KnapsackProblem
+
 from ast import Num
 from cProfile import label
 import time
@@ -7,30 +9,23 @@ from functools import reduce
 from math import pi,sqrt,cos,sin
 import matplotlib.pyplot as plt
 import csv
+import random
 N = 10  # Neighbourhood size
 
-n_items = 100
+n_items = eval(input("n_items="))
 MaxWeight = 10.0
 MinWeight = 1.0
-
-# Generate array of possible items
-# Real valued weights
-items=np.mod(range(0,n_items),10)+1
-#items = np.random.uniform(low=MinWeight, high=MaxWeight, size=(n_items,))
-#print(items)
-
-# Integer valued weights
-# items = np.random.randint(low=MinWeight,high=MaxWeight, size=(n_items,))
-# print(items)
-
-# Bag maximum capacity
 C = 55*n_items/10 / 2
-# Profits array for each item. The item index corresponds to its associated profit value
-values = np.vectorize(lambda x: x + 5)(items)
-
-#print("Item search space: %s" % items)
-#print("Item values %s" % values)
-#print("Bag capacity: %i" % C)
+cho_case=int(input("case="))
+if cho_case==1: #物品固定 價值固定+5
+    items=np.mod(range(0,n_items),10)+1 #用在背包看有沒有超重的時候 
+    values = np.vectorize(lambda x: x + 5)(items) 
+elif cho_case==2:#物品固定 價值隨機加5
+    items=np.mod(range(0,n_items),10)+1 #用在背包看有沒有超重的時候
+    values = np.vectorize(lambda x: x + random.randint(0, 5))(items)
+elif cho_case==3: #物品隨機 價值隨機+5
+    items = np.random.uniform(low=1, high=10, size=(n_items,))
+    values = np.vectorize(lambda x: x + random.randint(0, 5))(items)
 
 
 def calculate_weights(items, solution):
@@ -86,7 +81,7 @@ def find_best_worst(neighbours):
     return (neighbours[np.argmax(tmp)], neighbours[np.argmin(tmp)])
 
 
-def updateQ(worst_sol, best_sol, qindividuals):
+def updateQQ(worst_sol, best_sol, qindividuals):
     """Update the qbits population applying the quantum gate on each qbit.
        The movement is not made for those qbits on the tabu list"""
     theta = 0.01*pi
@@ -121,129 +116,114 @@ def updateQ1(best_sol, worst_sol, qindividuals, angle = 0.01):
                 qindividuals[i, 1] -= theta
     return qindividuals
 
+def updateQ(worst_sol,best_sol, qindividuals, o,t,os,ot):
+
+    for i in range(n_items):
+        mod_sinal = best_sol[i] - worst_sol[i]
+        if (qindividuals[i, 0]*qindividuals[i, 1] < 0) : mod_sinal *= -1
+        if mod_sinal ==1:
+            
+            A = o*qindividuals[i, 0] - os*qindividuals[i, 1]
+            B = os*qindividuals[i, 0] + o*qindividuals[i, 1]
+            qindividuals[i, 0] = A
+            qindividuals[i, 1] = B
+        elif mod_sinal ==-1:
+            
+            A = t*qindividuals[i, 0] - ot*qindividuals[i, 1]
+            B = ot*qindividuals[i, 0] + t*qindividuals[i, 1]
+            qindividuals[i, 0] = A
+            qindividuals[i, 1] = B
+    return qindividuals
 
 
-
-
-#qindividuals = np.zeros((n_items, 3))
-#qindividuals.fill(1 / sqrt(3))
-
-#solution = measure(qindividuals)
-
-
-#best_fit = solution
 
 
 i = 0
 j=0
 NumIter =1000
 
-time1=100 
-
-#print("Bag weight limit: %f" % C)
-#print("Number of iterations: %i" % NumIter)
-#print("Number of items: %i" % n_items)
-#print("Initial weight (without repair): %f" % calculate_weights(items, best_fit))
+time1=100 #14分鐘
 
 
-
-
-#print("Initial weight (with repair): %f" % calculate_weights(items, best_fit))
-#print("Initial profit (with repair): %f" % calculate_weights(values, best_fit))
-#print("Initial profit (with repair): %f" % calculate_weights(values, best_fit3))
-#print("Initial profit (with repair): %f" % calculate_weights(values, best_fit3))
-
-start_time = time.time()
 #1
 x_values = []
 y_values = []
 total = []
-#3
-y1_values = []
-total1 = []
+time_ary=[]
+
 
 
 for _ in range(time1):  
   y_values.append([None] * NumIter)
-  y1_values.append([None] * NumIter)
-
 
 for x in range(1,NumIter+1):
   x_values.append(x)
-  
 
 for x in range(time1):
   #1
+  start_time = time.time()
   qindividuals = np.zeros((n_items, 2))
   qindividuals.fill(1 / sqrt(2))
   solution = measure(qindividuals)
   best_fit = solution
   best_fit = adjust_solution(best_fit, C)
-  #3
-#   qindividuals1 = np.zeros((n_items, 2))
-#   qindividuals1.fill(1 / sqrt(2))
-#   solution1 = measure(qindividuals1)
-#   best_fit1= solution1
-#   best_fit1 = adjust_solution(best_fit1, C)
+
   i = 0
   j = 0
   
+  qc_gate=[np.cos(0.01*np.pi),np.cos(0.01*np.pi*(-1))]
+  qs_gate=[np.sin(0.01*np.pi),np.sin(0.01*np.pi*(-1))]
 
   while i < NumIter:
     i = i + 1
-    #1
     neighbours = gen_nbrs(qindividuals, N)
     neighbours = adjust_neighbours(neighbours, C)
     (best_solution, worst_solution) = find_best_worst(neighbours)
     best_fit = new_best_fit(best_solution, best_fit)
-    qindividuals = updateQ(best_solution, worst_solution, qindividuals)
+    qindividuals = updateQ(best_solution, worst_solution, qindividuals,qc_gate[0],qc_gate[1],qs_gate[0],qs_gate[1])
     gg = calculate_weights(values, best_fit)
     y_values[x][i - 1] = gg
-    #3
-    # neighbours1 = gen_nbrs(qindividuals1, N)
-    # neighbours1 = adjust_neighbours(neighbours1, C)
-    # (best_solution1, worst_solution1) = find_best_worst(neighbours1)
-    # best_fit1 = new_best_fit(best_solution1, best_fit1)
-    # qindividuals1 = updateQ(best_solution1, worst_solution1, qindividuals1)
-    # gg1 = calculate_weights(values, best_fit1)
-    # y1_values[x][i - 1] = gg1
-
+    
     
   print("第 %d 次" %x)
   print(gg)  
-             
+  end_time = time.time()
+  execution_time = end_time - start_time
+  time_ary.append(execution_time)
+  print(f"程序运行时间为: {execution_time} 秒")  
+avetime=0
+for pp in range(time1):
+    avetime+=time_ary[pp]
+print(avetime/time1)            
           
-
-    
 for p in range(NumIter):
   xx=0  
-  xx1=0
   for y in range(time1):
     
     if y <= time1-1:
       xx = xx + y_values[y][p]
-      #xx1= xx1 + y1_values[y][p]
       if y == time1-1:
         xx = round(xx / time1)
         total.append(xx)
-        #xx1 = round(xx1 / time1)
-        #total1.append(xx1)
-csv_file_path = "qts.csv"  #1
+
+# 指定要写入的CSV文件名
+if n_items==100:
+    csv_file_path = "QTS100.csv"  #1
+elif n_items==250:
+    csv_file_path = "QTS250.csv"
+elif n_items==500:
+    csv_file_path = "QTS500.csv"
+else:
+    csv_file_path = "QTS.csv"
 
 # 使用with语句打开文件，确保在处理完文件后自动关闭
 with open(csv_file_path, 'a', newline='',encoding='utf-8') as file:
     writer = csv.writer(file)   
 
-
-    #writer.writerow([text_data])
-
-    # 创建CSV写入对象
-        
     tl=[total]
-    # 将数据写入CSV文件
+
     writer.writerows(tl)
 
-    
 
     print(f"CSV文件已成功写入到 {csv_file_path}")
         
